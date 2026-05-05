@@ -2,7 +2,8 @@ plugins {
     id 'java'
 }
 
-group = 'spring.framework'
+group = 'io.github.andriianamazan'
+rootProject.name = 'spring.framework'
 version = '1.0-SNAPSHOT'
 
 repositories {
