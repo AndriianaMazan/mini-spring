@@ -12,13 +12,18 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DefaultApplicationContext implements ApplicationContext {
 
+    private final AtomicBoolean closed;
+    private final Thread shutdownHook;
     private final BeanFactory beanFactory;
     private final String packagePath;
 
     public DefaultApplicationContext(Class<?> primarySource) {
+        closed = new AtomicBoolean(false);
+        shutdownHook = new Thread(this::close, "spring-shutdown-hook");
         this.beanFactory = new DefaultBeanFactory();
         this.packagePath = primarySource.getPackageName();
     }
@@ -36,11 +41,22 @@ public class DefaultApplicationContext implements ApplicationContext {
                 .forEach(beanFactory::registerBeanDefinition);
 
         beanFactory.instantiateSingletons();
+
+        Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
 
     @Override
     public void close() {
+        if (closed.get()) {
+            return;
+        }
+
+        if (Thread.currentThread() != shutdownHook) {
+            Runtime.getRuntime().removeShutdownHook(shutdownHook);
+        }
+
         beanFactory.destroySingletons();
+        closed.set(true);
     }
 
     private List<Class<?>> findAllClasses(String packageName) throws ClassNotFoundException {
