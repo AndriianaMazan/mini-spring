@@ -1,6 +1,5 @@
 package io.github.amazan.springframework.factory;
 
-import io.github.amazan.springframework.exception.BeansException;
 import io.github.amazan.springframework.model.BeanDefinition;
 
 public interface BeanFactory {
@@ -11,7 +10,7 @@ public interface BeanFactory {
 
     void destroySingletons();
 
-    <T> T getBean(Class<T> clazz) throws BeansException;
+    <T> T getBean(Class<T> clazz);
 
-    <T> T getBean(String name) throws BeansException;
+    <T> T getBean(String name);
 }

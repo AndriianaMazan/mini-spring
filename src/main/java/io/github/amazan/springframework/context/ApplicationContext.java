@@ -6,7 +6,7 @@ public interface ApplicationContext {
 
     BeanFactory getBeanFactory();
 
-    void load() throws ClassNotFoundException;
+    void run();
 
     void close();
 

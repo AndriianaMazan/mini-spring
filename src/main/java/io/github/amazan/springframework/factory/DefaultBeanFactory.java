@@ -10,7 +10,11 @@ import io.github.amazan.springframework.model.BeanDefinition;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class DefaultBeanFactory implements BeanFactory {
 
@@ -28,14 +32,14 @@ public class DefaultBeanFactory implements BeanFactory {
     }
 
     @Override
-    public void instantiateSingletons() throws BeansException {
+    public void instantiateSingletons() {
         for (var definition : definitions.entrySet()) {
             if (Scope.SINGLETON.equals(definition.getValue().getScope())) {
                 try {
                     singletons.put(definition.getKey(), definition.getValue().getType().getDeclaredConstructor().newInstance());
                 } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
                          NoSuchMethodException e) {
-                    throw new BeansException("Bean could not be created", e);
+                    throw new BeansException("Bean '" + definition.getKey() + "' could not be created", e);
                 }
             }
         }
@@ -53,7 +57,7 @@ public class DefaultBeanFactory implements BeanFactory {
     }
 
     @Override
-    public void destroySingletons() throws BeansException {
+    public void destroySingletons() {
         var singletonsSnapshot = new ArrayList<>(singletons.values());
         Collections.reverse(singletonsSnapshot);
 
@@ -65,27 +69,37 @@ public class DefaultBeanFactory implements BeanFactory {
     }
 
     @Override
-    public <T> T getBean(Class<T> clazz) throws BeansException {
-        assertNotNull(clazz);
+    public <T> T getBean(Class<T> clazz) {
+        assertNotNull(clazz, "clazz");
 
         for (var bf : definitions.entrySet()) {
-            if (bf.getValue().getType().isAssignableFrom(clazz)) {
-                var instance = singletons.get(bf.getKey());
+            var name = bf.getKey();
+            var def = bf.getValue();
+            if (def == null) {
+                throw new BeanNotFoundException("Bean named '" + name + "' is not found.");
+            }
 
-                if (instance == null) {
-                    instance = createPrototypeBean(bf.getValue());
+            if (clazz.isAssignableFrom(def.getType())) {
+                var instance = singletons.get(name);
+
+                if (instance != null) {
+                    return (T) instance;
                 }
 
-                return (T) instance;
+                if (Scope.SINGLETON.equals(def.getScope())) {
+                    throw new BeansException("Singleton bean '" + name + "' has not been instantiated yet.");
+                }
+
+                return createPrototypeBean(def);
             }
         }
 
-        throw new BeanNotFoundException("Bean is not found.");
+        throw new BeanNotFoundException("Bean of type " + clazz.getName() + " is not found.");
     }
 
     @Override
-    public <T> T getBean(String name) throws BeansException {
-        assertNotNull(name);
+    public <T> T getBean(String name) {
+        assertNotNull(name, "name");
 
         var instance = singletons.get(name);
 
@@ -93,9 +107,13 @@ public class DefaultBeanFactory implements BeanFactory {
             return (T) instance;
         } else {
             if (definitions.containsKey(name)) {
+                var def = definitions.get(name);
+                if (Scope.SINGLETON.equals(def.getScope())) {
+                    throw new BeansException("Singleton bean '" + name + "' has not been instantiated yet.");
+                }
                 return createPrototypeBean(definitions.get(name));
             } else {
-                throw new BeanNotFoundException("Bean is not found.");
+                throw new BeanNotFoundException("Bean named '" + name + "' is not found.");
             }
         }
     }
@@ -108,7 +126,7 @@ public class DefaultBeanFactory implements BeanFactory {
             instance = clazz.getDeclaredConstructor().newInstance();
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
                  NoSuchMethodException e) {
-            throw new BeansException("Bean could not be created", e);
+            throw new BeansException("Bean '" + bf.getName() + "' could not be created.", e);
         }
 
         injectFields(clazz, instance);
@@ -126,7 +144,7 @@ public class DefaultBeanFactory implements BeanFactory {
                     try {
                         field.set(instance, obj);
                     } catch (IllegalAccessException e) {
-                        throw new RuntimeException(e);
+                        throw new BeansException("Failed to inject field '" + field.getName() + "' on bean '%s'.", e);
                     }
                 });
     }
@@ -140,14 +158,14 @@ public class DefaultBeanFactory implements BeanFactory {
                     try {
                         method.invoke(bean);
                     } catch (IllegalAccessException | InvocationTargetException e) {
-                        throw new RuntimeException(e);
+                        throw new BeansException("Failed to invoke @" + annotation.getSimpleName() + "method '" + method.getName() + "' on bean '" + bean.getClass().getName() + "'.", e);
                     }
                 });
     }
 
-    private void assertNotNull(Object o) {
+    private void assertNotNull(Object o, String name) {
         if (o == null) {
-            throw new IllegalArgumentException("Input parameter should not be null.");
+            throw new IllegalArgumentException(name + " must not be null.");
         }
     }
 
