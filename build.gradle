@@ -2,8 +2,7 @@ plugins {
     id 'java'
 }
 
-group = 'io.github.andriianamazan'
-rootProject.name = 'spring.framework'
+group = 'io.github.amazan'
 version = '1.0-SNAPSHOT'
 
 repositories {
