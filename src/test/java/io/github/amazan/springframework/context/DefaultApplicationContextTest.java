@@ -9,11 +9,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DefaultApplicationContextTest {
 
     private DefaultApplicationContext context;
-    private Thread runner;
 
     @BeforeEach
     void setUp() {
@@ -21,19 +21,16 @@ class DefaultApplicationContextTest {
     }
 
     @AfterEach
-    void tearDown() throws InterruptedException {
+    void tearDown() {
         if (context != null) {
             context.close();
-        }
-        if (runner != null) {
-            runner.join(2000);
         }
     }
 
     @Test
-    void shouldScanRegisterAndInstantiateAllComponentsInPackage() throws InterruptedException {
+    void shouldScanRegisterAndInstantiateAllComponentsInPackage() {
         context = new DefaultApplicationContext(HealthyBean1.class);
-        startRunnerAndWaitUntilBlocked();
+        context.run();
 
         HealthyBean1 bean1 = context.getBeanFactory().getBean(HealthyBean1.class);
         HealthyBean2 bean2 = context.getBeanFactory().getBean(HealthyBean2.class);
@@ -44,35 +41,22 @@ class DefaultApplicationContextTest {
     }
 
     @Test
-    void shouldUnblockRunWhenCloseIsCalled() throws InterruptedException {
+    void shouldInvokePreDestroyOnCloseAfterSuccessfulRun() {
         context = new DefaultApplicationContext(HealthyBean1.class);
-        startRunnerAndWaitUntilBlocked();
+        context.run();
 
         context.close();
-        runner.join(2000);
-
-        assertThat(runner.isAlive()).isFalse();
-    }
-
-    @Test
-    void shouldInvokePreDestroyOnCloseAfterSuccessfulRun() throws InterruptedException {
-        context = new DefaultApplicationContext(HealthyBean1.class);
-        startRunnerAndWaitUntilBlocked();
-
-        context.close();
-        runner.join(2000);
 
         assertThat(LifecycleRecorder.preDestroyEvents).contains("HealthyBean1");
     }
 
     @Test
-    void shouldBeIdempotentWhenCloseCalledTwice() throws InterruptedException {
+    void shouldBeIdempotentWhenCloseCalledTwice() {
         context = new DefaultApplicationContext(HealthyBean1.class);
-        startRunnerAndWaitUntilBlocked();
+        context.run();
 
         context.close();
         context.close();
-        runner.join(2000);
 
         assertThat(LifecycleRecorder.preDestroyEvents)
                 .filteredOn(event -> event.equals("HealthyBean1"))
@@ -80,30 +64,11 @@ class DefaultApplicationContextTest {
     }
 
     @Test
-    void shouldCleanUpPartiallyCreatedBeansWhenPostConstructFails() throws InterruptedException {
+    void shouldCleanUpPartiallyCreatedBeansWhenPostConstructFails() {
         context = new DefaultApplicationContext(SiblingBean.class);
-        runner = new Thread(context::run);
-        runner.setUncaughtExceptionHandler((t, e) -> { /* swallow expected failure */ });
-        runner.start();
-        runner.join(2000);
 
-        assertThat(runner.isAlive()).isFalse();
+        assertThatThrownBy(() -> context.run()).isInstanceOf(RuntimeException.class);
+
         assertThat(LifecycleRecorder.preDestroyEvents).contains("SiblingBean");
-    }
-
-    private void startRunnerAndWaitUntilBlocked() throws InterruptedException {
-        runner = new Thread(context::run);
-        runner.start();
-        waitForState(runner, Thread.State.WAITING, 2000);
-    }
-
-    private static void waitForState(Thread thread, Thread.State target, long timeoutMillis) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + timeoutMillis;
-        while (thread.getState() != target && System.currentTimeMillis() < deadline) {
-            Thread.sleep(10);
-        }
-        if (thread.getState() != target) {
-            throw new AssertionError("Thread did not reach state " + target + " within " + timeoutMillis + "ms (was " + thread.getState() + ")");
-        }
     }
 }

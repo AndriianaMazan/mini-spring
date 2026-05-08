@@ -13,14 +13,12 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DefaultApplicationContext implements ApplicationContext {
 
     private final AtomicBoolean closed;
     private final Thread shutdownHook;
-    private final CountDownLatch shutdownLatch;
 
     private final BeanFactory beanFactory;
     private final String packagePath;
@@ -28,7 +26,6 @@ public class DefaultApplicationContext implements ApplicationContext {
     public DefaultApplicationContext(Class<?> primarySource) {
         closed = new AtomicBoolean(false);
         shutdownHook = new Thread(this::close, "spring-shutdown-hook");
-        shutdownLatch = new CountDownLatch(1);
         this.beanFactory = new DefaultBeanFactory();
         this.packagePath = primarySource.getPackageName();
     }
@@ -40,12 +37,7 @@ public class DefaultApplicationContext implements ApplicationContext {
 
     @Override
     public void run() {
-        try {
-            load();
-            shutdownLatch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        load();
     }
 
     @Override
@@ -59,7 +51,6 @@ public class DefaultApplicationContext implements ApplicationContext {
         }
 
         beanFactory.destroySingletons();
-        shutdownLatch.countDown();
     }
 
     private void load() {
@@ -101,7 +92,7 @@ public class DefaultApplicationContext implements ApplicationContext {
 
             return classes;
         } catch (ClassNotFoundException | IOException e) {
-            throw new ApplicationContextException("Failed to scan package '" + packageName + "'." , e);
+            throw new ApplicationContextException("Failed to scan package '" + packageName + "'.", e);
         }
     }
 
